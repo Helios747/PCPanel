@@ -74,8 +74,27 @@ public final class SleepDetector {
 
     private void onResumed() {
         Platform.runLater(() -> {
+            // Wait a bit for USB subsystem to stabilize after resume
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException e) {
+                log.warn("Interrupted while waiting for system to stabilize after resume", e);
+            }
+
+            // Try to reconnect any disconnected devices
+            log.info("Attempting to reconnect devices after system resume");
+            deviceScanner.triggerDeviceRescan();
+
+            // Wait a bit more for device reconnection to complete
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                log.warn("Interrupted while waiting for device reconnection", e);
+            }
+
+            // Restore lighting configuration for all devices
             for (var device : devices.values()) {
-                log.info("RESUME: {}", device.getSerialNumber());
+                log.info("RESUME: Restoring lighting for {}", device.getSerialNumber());
                 outputInterpreter.sendLightingConfig(device.getSerialNumber(), device.getDeviceType(), device.getLightingConfig(), true);
             }
         });

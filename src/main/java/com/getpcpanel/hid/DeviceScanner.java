@@ -94,22 +94,42 @@ public class DeviceScanner implements HidServicesListener {
 
     @Override
     public void hidDeviceAttached(HidServicesEvent event) {
-        determineType(event).ifPresent(type -> foundPCPanel(event.getHidDevice(), type));
+        determineDeviceType(event.getHidDevice()).ifPresent(type -> foundPCPanel(event.getHidDevice(), type));
     }
 
     @Override
     public void hidDeviceDetached(HidServicesEvent event) {
-        determineType(event).ifPresent(type -> lostPCPanel(event.getHidDevice()));
+        determineDeviceType(event.getHidDevice()).ifPresent(type -> lostPCPanel(event.getHidDevice()));
     }
 
     @Override
     public void hidFailure(HidServicesEvent event) {
-        determineType(event).ifPresent(type -> lostPCPanel(event.getHidDevice()));
+        determineDeviceType(event.getHidDevice()).ifPresent(type -> lostPCPanel(event.getHidDevice()));
     }
 
-    private Optional<DeviceType> determineType(HidServicesEvent event) {
+    public void triggerDeviceRescan() {
+        log.info("Triggering device rescan to reconnect devices after suspend/resume");
+        try {
+            // Force enumeration of attached devices
+            var attachedDevices = hidServices.getAttachedHidDevices();
+            for (var device : attachedDevices) {
+                var deviceType = determineDeviceType(device);
+                if (deviceType.isPresent()) {
+                    String serialNumber = device.getSerialNumber();
+                    if (serialNumber != null && !connectedDeviceMap.containsKey(serialNumber)) {
+                        log.info("Reconnecting device after resume: {}", device);
+                        foundPCPanel(device, deviceType.get());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error during device rescan", e);
+        }
+    }
+
+    private Optional<DeviceType> determineDeviceType(HidDevice device) {
         for (var deviceType : DeviceType.ALL) {
-            if (event.getHidDevice().isVidPidSerial(deviceType.getVid(), deviceType.getPid(), null))
+            if (device.isVidPidSerial(deviceType.getVid(), deviceType.getPid(), null))
                 return Optional.of(deviceType);
         }
         return Optional.empty();
